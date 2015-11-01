@@ -16,7 +16,7 @@ class Leaf:
     
         print n, self.value
     
-    def serialise(self, n, encdict, node_array, type_array, bits):
+    def serialise(self, n, encdict, node_array, type_array, bits = 1):
     
         encdict[self.value] = (n, bits)
         node_array += [self.value]
@@ -120,7 +120,10 @@ def encode(input_file, output_file):
         data.append(i)
     
     node_bits, node_array, type_array, output_data = encode_data(data)
-    
+    encode_write(len(data), node_bits, node_array, type_array, output_data, output_file)
+
+def encode_write(size, node_bits, node_array, type_array, output_data, output_file):
+
     # Write the size of the node and type arrays, and the number of bits needed
     # for each node.
     output_file.write(struct.pack("<H", len(node_array)))
@@ -154,7 +157,7 @@ def encode(input_file, output_file):
         output_file.write(struct.pack("<B", c))
     
     # Write the size of the original data.
-    output_file.write(struct.pack("<H", len(data)))
+    output_file.write(struct.pack("<H", size))
     
     # Write the encoded data.
     output_file.write("".join(map(chr, output_data)))
@@ -188,14 +191,15 @@ def encode_data(input_data):
     if bit != 0:
         output_data.append(c)
     
-    # Decode to test.
-    decode_data(output_data, node_array, type_array, len(input_data), input_data)
-    
+    # Find the number of bits used to represent the maximum node value.
     node_bits = 0
     m = max(node_array)
     while m > 0:
         node_bits += 1
         m = m >> 1
+    
+    # At least one bit must be used.
+    node_bits = max(1, node_bits)
     
     return node_bits, node_array, type_array, output_data
 
@@ -213,12 +217,19 @@ def decode_data(input_data, node_array, type_array, size, expected_output = None
             c = input_data[i]
             i += 1
         
-        if c & 1 == 0:
-            offset += 1
-        else:
-            offset += node_array[offset] + 1
+        # If the current node is a choice node and not a leaf then find where
+        # it leads to.
+        if type_array[offset] == 0:
         
+            if c & 1 == 0:
+                offset += 1
+            else:
+                offset += node_array[offset] + 1
+        
+        # If the current node is a leaf node then read the value and prepare
+        # for the next one.
         if type_array[offset] == 1:
+        
             data.append(node_array[offset])
             if expected_output and data[-1] != expected_output[len(data)-1]:
                 sys.stderr.write("Decoding check failed at offset %x.\n" % (len(data)-1))
