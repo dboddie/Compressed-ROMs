@@ -108,7 +108,6 @@ def sorted(count):
 
 def encode(input_file, output_file):
 
-    count = [0] * 256
     data = []
     
     while True:
@@ -118,39 +117,9 @@ def encode(input_file, output_file):
             break
         
         i = ord(ch)
-        count[i] += 1
         data.append(i)
     
-    encdict, node_array, type_array = sorted(count)
-    
-    bit = 0
-    c = 0
-    output_data = []
-    
-    for i in data:
-    
-        v, l = encdict[i]
-        while l > 0:
-            c = c | ((v & 1) << bit)
-            v = v >> 1
-            l -= 1
-            bit += 1
-            if bit == 8:
-                output_data.append(c)
-                bit = 0
-                c = 0
-    
-    if bit != 0:
-        output_data.append(c)
-    
-    # Decode to test.
-    decode_data(output_data, node_array, type_array, len(data), data)
-    
-    node_bits = 0
-    m = max(node_array)
-    while m > 0:
-        node_bits += 1
-        m = m >> 1
+    node_bits, node_array, type_array, output_data = encode_data(data)
     
     # Write the size of the node and type arrays, and the number of bits needed
     # for each node.
@@ -189,6 +158,46 @@ def encode(input_file, output_file):
     
     # Write the encoded data.
     output_file.write("".join(map(chr, output_data)))
+
+def encode_data(input_data):
+
+    count = [0] * 256
+    
+    for c in input_data:
+        count[c] += 1
+    
+    encdict, node_array, type_array = sorted(count)
+    
+    bit = 0
+    c = 0
+    output_data = []
+    
+    for i in input_data:
+    
+        v, l = encdict[i]
+        while l > 0:
+            c = c | ((v & 1) << bit)
+            v = v >> 1
+            l -= 1
+            bit += 1
+            if bit == 8:
+                output_data.append(c)
+                bit = 0
+                c = 0
+    
+    if bit != 0:
+        output_data.append(c)
+    
+    # Decode to test.
+    decode_data(output_data, node_array, type_array, len(input_data), input_data)
+    
+    node_bits = 0
+    m = max(node_array)
+    while m > 0:
+        node_bits += 1
+        m = m >> 1
+    
+    return node_bits, node_array, type_array, output_data
 
 def decode_data(input_data, node_array, type_array, size, expected_output = None):
 
