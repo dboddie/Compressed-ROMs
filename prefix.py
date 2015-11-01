@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
-import pprint, sys
+import pprint, struct, sys
+
+class DecodingError(Exception):
+    pass
 
 class Leaf:
 
@@ -13,10 +16,12 @@ class Leaf:
     
         print n, self.value
     
-    def serialise(self, n, encdict, node_array, bits):
+    def serialise(self, n, encdict, node_array, type_array, bits):
     
         encdict[self.value] = (n, bits)
-        node_array += [-self.value]
+        node_array += [self.value]
+        # This node is a leaf.
+        type_array += [1]
 
 class Node:
 
@@ -40,26 +45,28 @@ class Node:
             self.leaf0.dump(n + "1")
             self.leaf1.dump(n + "0")
     
-    def serialise(self, n, encdict, node_array, bits = 0):
+    def serialise(self, n, encdict, node_array, type_array, bits = 0):
     
         i = len(node_array)
         
         # Add an entry to be filled in later.
         node_array += [0]
+        # This node is not a leaf.
+        type_array += [0]
         
         v0 = n
         v1 = n | (1 << bits)
         
         if isinstance(self.leaf0, Leaf):
-            self.leaf0.serialise(v0, encdict, node_array, bits + 1)
+            self.leaf0.serialise(v0, encdict, node_array, type_array, bits + 1)
             # Fill in the offset that points to the second leaf or node.
-            node_array[i] = len(node_array) - i
-            self.leaf1.serialise(v1, encdict, node_array, bits + 1)
+            node_array[i] = len(node_array) - i - 1
+            self.leaf1.serialise(v1, encdict, node_array, type_array, bits + 1)
         else:
-            self.leaf1.serialise(v0, encdict, node_array, bits + 1)
+            self.leaf1.serialise(v0, encdict, node_array, type_array, bits + 1)
             # Fill in the offset that points to the second leaf or node.
-            node_array[i] = len(node_array) - i
-            self.leaf0.serialise(v1, encdict, node_array, bits + 1)
+            node_array[i] = len(node_array) - i - 1
+            self.leaf0.serialise(v1, encdict, node_array, type_array, bits + 1)
 
 def sorted(count):
 
@@ -94,12 +101,10 @@ def sorted(count):
     
     encdict = {}
     node_array = []
-    nodes[0].serialise(0, encdict, node_array)
+    type_array = []
+    nodes[0].serialise(0, encdict, node_array, type_array)
     
-    print len(node_array)
-    print min(node_array), max(node_array), total
-    
-    return encdict, node_array
+    return encdict, node_array, type_array
 
 def encode(input_file, output_file):
 
@@ -116,7 +121,7 @@ def encode(input_file, output_file):
         count[i] += 1
         data.append(i)
     
-    encdict, node_array = sorted(count)
+    encdict, node_array, type_array = sorted(count)
     
     bit = 0
     c = 0
@@ -131,19 +136,42 @@ def encode(input_file, output_file):
             l -= 1
             bit += 1
             if bit == 8:
-                output_file.write(chr(c))
                 output_data.append(c)
                 bit = 0
                 c = 0
     
     if bit != 0:
-        output_file.write(chr(c))
         output_data.append(c)
     
     # Decode to test.
-    decode_(output_data, node_array, data, len(data))
+    decode_data(output_data, node_array, type_array, len(data), data)
+    
+    # Write the node and type arrays to the file.
+    output_file.write(struct.pack("<H", len(node_array)))
+    
+    for offset in node_array:
+        output_file.write(struct.pack("<B", offset))
+    
+    bit = 0
+    c = 0
+    for type_bit in type_array:
+        c = c | (type_bit << bit)
+        bit += 1
+        if bit == 8:
+            output_file.write(struct.pack("<B", c))
+            c = 0
+            bit = 0
+    
+    if bit != 0:
+        output_file.write(struct.pack("<B", c))
+    
+    # Write the size of the original data.
+    output_file.write(struct.pack("<H", len(data)))
+    
+    # Write the encoded data.
+    output_file.write("".join(map(chr, output_data)))
 
-def decode_(input_data, node_array, expected_output, size = 32768):
+def decode_data(input_data, node_array, type_array, size, expected_output = None):
 
     bit = 0
     c = 0
@@ -160,11 +188,11 @@ def decode_(input_data, node_array, expected_output, size = 32768):
         if c & 1 == 0:
             offset += 1
         else:
-            offset += node_array[offset]
+            offset += node_array[offset] + 1
         
-        if node_array[offset] <= 0:
-            data.append(-node_array[offset])
-            if data[-1] != expected_output[len(data)-1]:
+        if type_array[offset] == 1:
+            data.append(node_array[offset])
+            if expected_output and data[-1] != expected_output[len(data)-1]:
                 sys.stderr.write("Decoding check failed at offset %x.\n" % (len(data)-1))
                 sys.exit(1)
             offset = 0
@@ -173,6 +201,39 @@ def decode_(input_data, node_array, expected_output, size = 32768):
         bit = (bit + 1) % 8
     
     return data
+
+def decode(input_file, output_file):
+
+    # Read the number of nodes.
+    nodes = struct.unpack("<H", input_file.read(2))[0]
+    print nodes
+    
+    # Read the nodes themselves.
+    node_array = []
+    n = 0
+    while n < nodes:
+        node_array.append(struct.unpack("<B", input_file.read(1))[0])
+        n += 1
+    
+    # Read the types of the nodes.
+    type_array = []
+    n = 0
+    c = 0
+    while n < nodes:
+        if n % 8 == 0:
+            c = struct.unpack("<B", input_file.read(1))[0]
+        
+        type_array.append((c >> (n % 8)) & 1)
+        n += 1
+    
+    # Read the size of the original data.
+    size = struct.unpack("<H", input_file.read(2))[0]
+    
+    # Read the encoded data.
+    data = map(lambda c: struct.unpack("<B", c)[0], input_file.read())
+    
+    decoded_data = decode_data(data, node_array, type_array, size)
+    output_file.write("".join(map(chr, decoded_data)))
 
 if __name__ == "__main__":
 
