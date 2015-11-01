@@ -231,9 +231,10 @@ def decode_data(input_data, node_array, type_array, size, expected_output = None
         if type_array[offset] == 1:
         
             data.append(node_array[offset])
+            
             if expected_output and data[-1] != expected_output[len(data)-1]:
-                sys.stderr.write("Decoding check failed at offset %x.\n" % (len(data)-1))
-                sys.exit(1)
+                raise DecodingError, "Decoding check failed at offset %x." % (len(data)-1)
+            
             offset = 0
         
         c = c >> 1
