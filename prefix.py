@@ -146,11 +146,30 @@ def encode(input_file, output_file):
     # Decode to test.
     decode_data(output_data, node_array, type_array, len(data), data)
     
-    # Write the node and type arrays to the file.
-    output_file.write(struct.pack("<H", len(node_array)))
+    node_bits = 0
+    m = max(node_array)
+    while m > 0:
+        node_bits += 1
+        m = m >> 1
     
+    # Write the size of the node and type arrays, and the number of bits needed
+    # for each node.
+    output_file.write(struct.pack("<H", len(node_array)))
+    output_file.write(struct.pack("<B", node_bits))
+    
+    # Write the node and type arrays to the file.
+    bit = 0
+    c = 0
     for offset in node_array:
-        output_file.write(struct.pack("<B", offset))
+        c = c | (offset << bit)
+        bit += node_bits
+        while bit >= 8:
+            output_file.write(struct.pack("<B", c & 0xff))
+            c = c >> 8
+            bit -= 8
+    
+    if bit != 0:
+        output_file.write(struct.pack("<B", c & 0xff))
     
     bit = 0
     c = 0
@@ -204,24 +223,39 @@ def decode_data(input_data, node_array, type_array, size, expected_output = None
 
 def decode(input_file, output_file):
 
-    # Read the number of nodes.
+    # Read the number of nodes and their size in bits.
     nodes = struct.unpack("<H", input_file.read(2))[0]
-    print nodes
+    node_bits = struct.unpack("<B", input_file.read(1))[0]
+    node_mask = (1 << node_bits) - 1
     
     # Read the nodes themselves.
     node_array = []
     n = 0
+    c = 0
+    bit = 0
     while n < nodes:
-        node_array.append(struct.unpack("<B", input_file.read(1))[0])
-        n += 1
+    
+        # Read bytes until there are enough bits for a node.
+        if bit < node_bits:
+            c = c | (ord(input_file.read(1)) << bit)
+            bit += 8
+        
+        # If there are enough node bits, create a node and keep any remaining
+        # bits for the next node.
+        if bit >= node_bits:
+            node_array.append(c & node_mask)
+            bit -= node_bits
+            c = c >> node_bits
+            n += 1
     
     # Read the types of the nodes.
     type_array = []
     n = 0
     c = 0
     while n < nodes:
+    
         if n % 8 == 0:
-            c = struct.unpack("<B", input_file.read(1))[0]
+            c = ord(input_file.read(1))
         
         type_array.append((c >> (n % 8)) & 1)
         n += 1
@@ -230,7 +264,7 @@ def decode(input_file, output_file):
     size = struct.unpack("<H", input_file.read(2))[0]
     
     # Read the encoded data.
-    data = map(lambda c: struct.unpack("<B", c)[0], input_file.read())
+    data = map(ord, input_file.read())
     
     decoded_data = decode_data(data, node_array, type_array, size)
     output_file.write("".join(map(chr, decoded_data)))
