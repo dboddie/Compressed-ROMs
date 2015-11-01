@@ -120,14 +120,16 @@ def encode(input_file, output_file):
         data.append(i)
     
     node_bits, node_array, type_array, output_data = encode_data(data)
-    encode_write(len(data), node_bits, node_array, type_array, output_data, output_file)
+    output_file.write(encode_write(len(data), node_bits, node_array,
+                                   type_array, output_data))
 
-def encode_write(size, node_bits, node_array, type_array, output_data, output_file):
+def encode_write(size, node_bits, node_array, type_array, output_data):
 
     # Write the size of the node and type arrays, and the number of bits needed
     # for each node.
-    output_file.write(struct.pack("<H", len(node_array)))
-    output_file.write(struct.pack("<B", node_bits))
+    output_buf = ""
+    output_buf += struct.pack("<H", len(node_array))
+    output_buf += struct.pack("<B", node_bits)
     
     # Write the node and type arrays to the file.
     bit = 0
@@ -136,12 +138,12 @@ def encode_write(size, node_bits, node_array, type_array, output_data, output_fi
         c = c | (offset << bit)
         bit += node_bits
         while bit >= 8:
-            output_file.write(struct.pack("<B", c & 0xff))
+            output_buf += struct.pack("<B", c & 0xff)
             c = c >> 8
             bit -= 8
     
     if bit != 0:
-        output_file.write(struct.pack("<B", c & 0xff))
+        output_buf += struct.pack("<B", c & 0xff)
     
     bit = 0
     c = 0
@@ -149,18 +151,20 @@ def encode_write(size, node_bits, node_array, type_array, output_data, output_fi
         c = c | (type_bit << bit)
         bit += 1
         if bit == 8:
-            output_file.write(struct.pack("<B", c))
+            output_buf += struct.pack("<B", c)
             c = 0
             bit = 0
     
     if bit != 0:
-        output_file.write(struct.pack("<B", c))
+        output_buf += struct.pack("<B", c)
     
     # Write the size of the original data.
-    output_file.write(struct.pack("<H", size))
+    output_buf += struct.pack("<H", size)
     
     # Write the encoded data.
-    output_file.write("".join(map(chr, output_data)))
+    output_buf += "".join(map(chr, output_data))
+    
+    return output_buf
 
 def encode_data(input_data):
 
@@ -289,6 +293,7 @@ def decode(input_file, output_file):
     
     decoded_data = decode_data(data, node_array, type_array, size)
     output_file.write("".join(map(chr, decoded_data)))
+
 
 if __name__ == "__main__":
 
