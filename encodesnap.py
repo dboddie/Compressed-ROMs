@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sys
-import hencode
+import hencode, rlencode
 
 if __name__ == "__main__":
 
@@ -43,7 +43,10 @@ if __name__ == "__main__":
     
     f.close()
     
-    node_bits, node_array, type_array, output_data = hencode.encode_data(memory)
+    subst, rldata = rlencode.encode_data(memory)
+    data = map(ord, rlencode.encode_write(subst, rldata))
+    
+    node_bits, node_array, type_array, output_data = hencode.encode_data(data)
     
     f = open(output_file, "wb")
     f.write(hencode.encode_write(len(memory), node_bits, node_array, type_array,
