@@ -46,7 +46,7 @@ if __name__ == "__main__":
     node_bits, node_array, type_array, output_data = hencode.encode_data(memory)
     
     f = open(output_file, "wb")
-    hencode.encode_write(len(memory), node_bits, node_array, type_array,
-                         output_data, f)
+    f.write(hencode.encode_write(len(memory), node_bits, node_array, type_array,
+                                 output_data))
     
     sys.exit()
