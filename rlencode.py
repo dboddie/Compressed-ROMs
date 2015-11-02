@@ -33,6 +33,68 @@ def encode_write(subst, output_data):
     
     return output_buf
 
+def find_spans(c, data):
+
+    new_data = []
+    span = 0
+    
+    for j in data:
+    
+        if j == c:
+            # The value is the one we are encoding so increase the span.
+            span += 1
+            
+            # Only allow spans of up to 256 values in length.
+            if span == 256:
+                new_data += [c, span - 1]
+                span = 0
+        else:
+            # Add the pending span to the output.
+            if span > 0:
+                new_data += [c, span - 1]
+            
+            # Add the new value to the output.
+            new_data.append(j)
+            span = 0
+    
+    if span > 0:
+        new_data += [c, span - 1]
+    
+    return new_data
+
+def encode_spans(subst, data):
+
+    new_data = []
+    span = 0
+    c = None
+    
+    for j in data:
+    
+        if j in subst:
+        
+            if c == j:
+                span += 1
+                if span == 256:
+                    new_data += [c, span - 1]
+                    span = 0
+            else:
+                if span > 0:
+                    new_data += [c, span - 1]
+                c = j
+                span = 1
+        else:
+            if span > 0:
+                new_data += [c, span - 1]
+            
+            new_data.append(j)
+            c = j
+            span = 0
+    
+    if span > 0:
+        new_data += [c, span - 1]
+    
+    return new_data
+
 def encode_data(input_data):
 
     count = [0] * 256
@@ -61,65 +123,40 @@ def encode_data(input_data):
     while i >= 0:
     
         n, c = values[i]
-        new_data = []
-        span = 0
+        new_data = find_spans(c, data)
         
-        for j in data:
-        
-            if j == c:
-                # The value is the one we are encoding so increase the span.
-                span += 1
-                
-                # Only allow spans of up to 256 values in length.
-                if span == 256:
-                    new_data += [c, span - 1]
-                    span = 0
-            else:
-                # Add the pending span to the output.
-                if span > 0:
-                    new_data += [c, span - 1]
-                
-                # Add the new value to the output.
-                new_data.append(j)
-                span = 0
-        
-        if span > 0:
-            new_data += [c, span - 1]
-        
-        if len(new_data) >= length:
-            break
-        else:
-            # Replace the data with the encoded data.
-            data = new_data
+        if len(new_data) + 1 < length - 32:
+            # If the length of the new data plus the byte needed to store the
+            # substitution is less than the original length minus an arbitrary
+            # amount then record the substitution value.
             subst.append(c)
-            # Update the length to improve on and try the next value.
-            length = len(data)
-            i -= 1
+        else:
+            break
+        
+        i -= 1
+    
+    data = encode_spans(subst, data)
     
     return subst, data
 
 def decode_data(subst, input_data):
 
-    data = input_data[:]
+    # Apply the substitutions.
+    data = []
+    j = 0
     
-    # Apply the substitutions in reverse order.
-    for c in subst[::-1]:
+    while j < len(input_data):
     
-        new_data = []
+        c = input_data[j]
         
-        j = 0
-        while j < len(data):
-        
-            if data[j] == c:
-                span = data[j + 1] + 1
-                new_data += [c] * span
-                j += 1
-            else:
-                new_data.append(data[j])
-            
+        if c in subst:
+            span = input_data[j + 1] + 1
+            data += [c] * span
             j += 1
+        else:
+            data.append(c)
         
-        data = new_data
+        j += 1
     
     return data
 
