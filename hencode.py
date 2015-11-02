@@ -125,9 +125,12 @@ def encode(input_file, output_file):
 
 def encode_write(size, node_bits, node_array, type_array, output_data):
 
+    # Write the size of the original data.
+    output_buf = ""
+    output_buf += struct.pack("<H", size)
+    
     # Write the size of the node and type arrays, and the number of bits needed
     # for each node.
-    output_buf = ""
     output_buf += struct.pack("<H", len(node_array))
     output_buf += struct.pack("<B", node_bits)
     
@@ -157,9 +160,6 @@ def encode_write(size, node_bits, node_array, type_array, output_data):
     
     if bit != 0:
         output_buf += struct.pack("<B", c)
-    
-    # Write the size of the original data.
-    output_buf += struct.pack("<H", size)
     
     # Write the encoded data.
     output_buf += "".join(map(chr, output_data))

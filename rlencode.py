@@ -2,6 +2,9 @@
 
 import struct, sys
 
+class DecodingError(Exception):
+    pass
+
 def encode(input_file, output_file):
 
     data = []
@@ -16,12 +19,14 @@ def encode(input_file, output_file):
         data.append(i)
     
     subst, output_data = encode_data(data)
-    output_file.write(encode_write(subst, output_data))
+    output_file.write(encode_write(len(data), subst, output_data))
 
-def encode_write(subst, output_data):
+def encode_write(size, subst, output_data):
 
-    # Write the size of the substitution value list.
+    # Write the size of the output data and the size of the substitution value
+    # list.
     output_buf = ""
+    output_buf += struct.pack("<H", size)
     output_buf += struct.pack("<B", len(subst))
     
     # Write the substitution values.
@@ -162,6 +167,9 @@ def decode_data(subst, input_data):
 
 def decode(input_file, output_file):
 
+    # Read the size of the output data.
+    size = struct.unpack("<H", input_file.read(2))[0]
+    
     # Read the number of substitutions.
     n = struct.unpack("<B", input_file.read(1))[0]
     
@@ -174,6 +182,10 @@ def decode(input_file, output_file):
     data = map(ord, input_file.read())
     
     decoded_data = decode_data(subst, data)
+    
+    if len(decoded_data) != size:
+        raise DecodingError, "Decoded %i bytes of data. Expected %i bytes." % (len(decoded_data), size)
+    
     output_file.write("".join(map(chr, decoded_data)))
 
 
