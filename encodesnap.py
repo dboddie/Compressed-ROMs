@@ -44,7 +44,7 @@ if __name__ == "__main__":
     f.close()
     
     subst, rldata = rlencode.encode_data(memory)
-    data = map(ord, rlencode.encode_write(subst, rldata))
+    data = map(ord, rlencode.encode_write(len(memory), subst, rldata))
     
     node_bits, node_array, type_array, output_data = hencode.encode_data(data)
     
