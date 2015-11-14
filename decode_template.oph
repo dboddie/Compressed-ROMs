@@ -1,0 +1,299 @@
+; Copyright (C) 2015 David Boddie <david@boddie.org.uk>
+;
+; This program is free software: you can redistribute it and/or modify
+; it under the terms of the GNU General Public License as published by
+; the Free Software Foundation, either version 3 of the License, or
+; (at your option) any later version.
+;
+; This program is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+.org $8000
+
+rom_start:
+.byte 0, 0, 0
+jmp service_entry
+
+; ROM type
+.byte $82       ; 6502 code (2), language ($40), service ($80)
+
+copyright_offset:
+.byte [copyright_string - rom_start - 1]
+
+; Version
+.byte 1
+
+; Title string
+.byte "Decoder", 0
+
+; Version string
+.byte "1.0", 0
+
+copyright_string:
+.byte "(C) 2015 David Boddie", 0
+
+; Second processor relocation address
+.byte 0, $80, 0, 0
+
+service_entry:
+
+    cmp #4
+    beq service_command
+
+    service_entry_exit:
+    clc
+    rts
+
+commands:
+.byte <decode_name, >decode_name
+
+decode_name: .byte "DECODE", 13
+
+routines:
+.byte <decode_command, >decode_command
+
+service_command:
+
+    tya                         ; push Y and X registers onto the stack
+    pha
+    txa
+    pha
+
+    clc
+    tya         ; Store the address of the command line in an new address that
+    adc $f2     ; can used zero-based post-indexed addressing.
+    sta $74
+    lda $f3
+    adc #0
+    sta $75
+    clc
+
+    ldx #0
+    service_command_loop:
+
+        lda commands,x
+        sta $72
+        lda [commands + 1],x
+        sta $73
+
+        ldy #0
+
+        service_command_test_loop:
+
+            lda ($72),y
+            cmp ($74),y
+            bne service_command_next
+            iny
+            cmp #13
+            bne service_command_test_loop
+
+        txa
+        lda routines,x
+        sta $72
+        lda [routines + 1],x
+        sta $73
+
+        jmp ($72)
+
+        service_command_next:
+
+        inx
+        inx
+        cpx #2
+        bne service_command_loop
+
+    service_command_not_found:
+    pla                         ; pop Y and X registers off the stack
+    tax
+    pla
+    tay
+    lda #4                      ; restore A
+    rts
+
+service_command_claimed:
+
+    pla                         ; pop Y and X registers off the stack
+    tax
+    pla
+    tay
+    lda #0                      ; claim service command
+    rts
+
+decode_command:
+
+    ; Check the system in use.
+
+    lda #129
+    ldx #0
+    ldy #255
+    jsr $fff4
+    cpx #1
+    beq electron_os
+    bne service_command_claimed
+
+    electron_os:
+
+decode:
+
+    lda #<start_address
+    sta $70
+    lda #>start_address
+    sta $71
+
+    lda #<data
+    sta $72
+    lda #>data
+    sta $73
+
+    lda #<node_array    ; Maintain a pointer to the current position in the
+    sta $74             ; node array.
+    lda #>node_array
+    sta $75
+
+    lda #0              ; Byte offset into the type array.
+    sta $76
+    lda #$01            ; Bit mask into the current type byte.
+    sta $77
+
+    lda #0              ; Bit counter for the input.
+    sta $7a
+
+    ldy #0
+
+    decode_loop:
+
+        lda $7a
+        and #$07
+        bne decode_bit
+
+        read_next_byte:
+
+        lda ($72),y             ; Read a byte of the encoded data.
+        sta $78
+
+        inc $72
+        bne decode_bit
+        inc $73
+
+        decode_bit:
+
+        ldx $76
+        lda type_array,x    ; Read the type byte.
+        and $77             ; Read the current bit.
+        beq decode_node     ; Zero bits represent nodes, one bits leaves.
+
+        decode_leaf:        ; Decode the value if a leaf node is encountered.
+
+        lda ($74),y         ; Read the value from the node array.
+        sta ($70),y         ; Store the decoded value.
+        inc $70
+        bne check_end
+        inc $71
+
+        check_end:
+
+        lda $70
+        cmp #<end_address
+        bne reset_pointers
+
+        lda $71
+        cmp #>end_address
+        bne reset_pointers
+
+        jmp decode_loop_end
+
+        reset_pointers:
+
+        lda #<node_array    ; Reset the node pointer.
+        sta $74
+        lda #>node_array
+        sta $75
+
+        lda #0              ; Reset the type offset and mask.
+        sta $76
+        lda #$01
+        sta $77
+
+        jmp decode_next_bit
+
+        decode_node:
+
+        lsr $78             ; Take the current bit from the current byte.
+        bcc next_node       ; A zero value means we go to the next node in
+        clc                 ; the array.
+
+        lda ($74),y         ; Read the offset (minus one) from the node
+        sta $79             ; array. (It will be incremented later.)
+        adc $74             ; Add it to the current offset.
+        sta $74
+        bcc update_type_offset
+        inc $75
+        clc
+
+        update_type_offset:
+
+        lda $79             ; Use the offset (minus one) from the node
+        lsr                 ; array to update the byte offset into the type
+        lsr                 ; array.
+        lsr                 ; Calculate the number of bytes to skip.
+        clc
+        adc $76
+        sta $76
+        clc
+
+        lda $79             ; Update the type array bit mask.
+        and #$07
+        beq next_node
+
+        tax
+
+        update_type_mask:
+
+            rol $77
+            bcc update_type_mask_next
+
+            rol $77         ; We ran out of bits, so reset the mask to the
+            inc $76         ; first bit. Increment the type offset to refer
+                            ; to the next byte in the array.
+
+            update_type_mask_next:
+            dex
+            bne update_type_mask
+
+        next_node:
+
+        inc $74                 ; Increment the offset by one to select the
+        bne update_type_pointer ; next item in the node array.
+        inc $75
+
+        update_type_pointer:
+
+        rol $77                 ; Update the bit mask in the type array to
+        bcc decode_leaf_check   ; refer to the next item.
+
+        rol $77             ; We ran out of bits, so reset the mask to the
+        inc $76             ; first bit. Increment the type offset to refer
+                            ; to the next byte in the array.
+
+        decode_leaf_check:
+
+        ldx $76
+        lda type_array,x    ; Read the type byte.
+        and $77             ; Read the current bit.
+        bne decode_leaf     ; Zero bits represent nodes, one bits leaves.
+
+        decode_next_bit:
+
+        inc $7a
+        jmp decode_loop
+
+    decode_loop_end:
+    clc
+    rts
+
+; Data follows this line:
