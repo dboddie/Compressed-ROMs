@@ -135,36 +135,35 @@ def encode_write(size, node_bits, node_array, type_array, output_data):
     output_buf += struct.pack("<B", node_bits)
     
     # Write the node and type arrays to the file.
-    bit = 0
-    c = 0
-    for offset in node_array:
-        c = c | (offset << bit)
-        bit += node_bits
-        while bit >= 8:
-            output_buf += struct.pack("<B", c & 0xff)
-            c = c >> 8
-            bit -= 8
-    
-    if bit != 0:
-        output_buf += struct.pack("<B", c & 0xff)
-    
-    bit = 0
-    c = 0
-    for type_bit in type_array:
-        c = c | (type_bit << bit)
-        bit += 1
-        if bit == 8:
-            output_buf += struct.pack("<B", c)
-            c = 0
-            bit = 0
-    
-    if bit != 0:
-        output_buf += struct.pack("<B", c)
+    output_buf += "".join(map(chr, encode_bits(node_array, node_bits)))
+    output_buf += "".join(map(chr, encode_bits(type_array, 1)))
     
     # Write the encoded data.
     output_buf += "".join(map(chr, output_data))
     
     return output_buf
+
+def encode_bits(sequence, bits):
+
+    """Encodes the values in the given sequence, each with the specified number
+    of bits, as a list of 8 bit values.
+    """
+    data = []
+    bit = 0
+    c = 0
+    for v in sequence:
+        c = c | (v << bit)
+        bit += bits
+        while bit >= 8:
+            data.append(c & 0xff)
+            c = c >> 8
+            bit -= 8
+    
+    if bit != 0:
+        data.append(c & 0xff)
+    
+    return data
+
 
 def encode_data(input_data):
 
@@ -248,6 +247,9 @@ def decode_data(input_data, node_array, type_array, size, expected_output = None
 
 def decode(input_file, output_file):
 
+    # Read the size of the original data.
+    size = struct.unpack("<H", input_file.read(2))[0]
+    
     # Read the number of nodes and their size in bits.
     nodes = struct.unpack("<H", input_file.read(2))[0]
     node_bits = struct.unpack("<B", input_file.read(1))[0]
@@ -284,9 +286,6 @@ def decode(input_file, output_file):
         
         type_array.append((c >> (n % 8)) & 1)
         n += 1
-    
-    # Read the size of the original data.
-    size = struct.unpack("<H", input_file.read(2))[0]
     
     # Read the encoded data.
     data = map(ord, input_file.read())
