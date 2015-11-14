@@ -25,16 +25,19 @@ class Leaf:
 
 class Node:
 
-    def __init__(self, leaf0, leaf1):
+    def __init__(self, leafA, leafB):
     
-        if leaf0.weight < leaf1.weight:
-            self.leaf0 = leaf0
-            self.leaf1 = leaf1
-        else:
-            self.leaf1 = leaf0
-            self.leaf0 = leaf1
+        # Store the two leaf nodes so that leaf0 refers to the node
+        # representing the less common value.
         
-        self.weight = leaf0.weight + leaf1.weight
+        if leafA.weight < leafB.weight:
+            self.leaf0 = leafA
+            self.leaf1 = leafB
+        else:
+            self.leaf1 = leafA
+            self.leaf0 = leafB
+        
+        self.weight = leafA.weight + leafB.weight
     
     def dump(self, n = ""):
     
@@ -58,15 +61,39 @@ class Node:
         v1 = n | (1 << bits)
         
         if isinstance(self.leaf0, Leaf):
-            self.leaf0.serialise(v0, encdict, node_array, type_array, bits + 1)
-            # Fill in the offset that points to the second leaf or node.
-            node_array[i] = len(node_array) - i - 1
-            self.leaf1.serialise(v1, encdict, node_array, type_array, bits + 1)
+            first = self.leaf0
+            second = self.leaf1
         else:
-            self.leaf1.serialise(v0, encdict, node_array, type_array, bits + 1)
-            # Fill in the offset that points to the second leaf or node.
+            first = self.leaf1
+            second = self.leaf0
+        
+        # Serialise the nodes beneath this one using temporary containers.
+        ed = {}
+        na = []
+        ta = []
+        
+        first.serialise(v0, ed, na, ta, bits + 1)
+        
+        if len(na) <= 256:
+        
+            # Fill in the offset (minus 1) that points to the second leaf or
+            # node.
+            node_array[i] = len(na)
+            
+            # Extend the arrays and encoding dictionary with the contents of
+            # the temporary containers.
+            node_array += na
+            type_array += ta
+            encdict.update(ed)
+            
+            second.serialise(v1, encdict, node_array, type_array, bits + 1)
+        
+        else:
+            # Serialise the nodes in the reverse order to try and minimise the
+            # offsets stored in the node array.
+            second.serialise(v0, encdict, node_array, type_array, bits + 1)
             node_array[i] = len(node_array) - i - 1
-            self.leaf0.serialise(v1, encdict, node_array, type_array, bits + 1)
+            first.serialise(v1, encdict, node_array, type_array, bits + 1)
 
 def sorted(count):
 

@@ -39,6 +39,10 @@ if __name__ == "__main__":
     # Only Huffman encode the run-length encoded data.
     node_bits, node_array, type_array, output_data = hencode.encode_data(data)
     
+    if node_bits > 8:
+        sys.stderr.write("Cannot encode node arrays with values requiring more than 8 bits.\n")
+        sys.exit(1)
+    
     f = open("temp.oph", "wb")
     
     # Write the decoding routines.
@@ -54,10 +58,6 @@ if __name__ == "__main__":
     #f.write("subst_array:\n")
     #write_oph_data(hencode.encode_bits(subst, 8), f)
     f.write("node_array:\n")
-    if node_bits > 8:
-        sys.stderr.write("Cannot encode node arrays with values requiring more than 8 bits.\n")
-        sys.exit(1)
-    
     write_oph_data(hencode.encode_bits(node_array, 8), f)
     f.write("\n")
     f.write("type_array:\n")
