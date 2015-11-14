@@ -74,7 +74,7 @@ class Node:
         
         first.serialise(v0, ed, na, ta, bits + 1)
         
-        if len(na) <= 256:
+        if len(na) <= 255:
         
             # Fill in the offset (minus 1) that points to the second leaf or
             # node.
