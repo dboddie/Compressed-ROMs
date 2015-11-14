@@ -74,11 +74,13 @@ class Node:
         
         first.serialise(v0, ed, na, ta, bits + 1)
         
-        if len(na) <= 255:
+        if len(na) <= 256:
         
-            # Fill in the offset (minus 1) that points to the second leaf or
-            # node.
-            node_array[i] = len(na)
+            # Fill in the offset that points to the second leaf or node,
+            # skipping the offset itself and the length of the new array
+            # elements, and storing the result minus 1 since their must be at
+            # least one new element.
+            node_array[i] = len(na) - 1
             
             # Extend the arrays and encoding dictionary with the contents of
             # the temporary containers.
@@ -92,7 +94,11 @@ class Node:
             # Serialise the nodes in the reverse order to try and minimise the
             # offsets stored in the node array.
             second.serialise(v0, encdict, node_array, type_array, bits + 1)
-            node_array[i] = len(node_array) - i - 1
+            
+            # Store the length of the new elements minus 1 as the offset in the
+            # node array.
+            node_array[i] = len(node_array) - (i + 1) - 1
+            
             first.serialise(v1, encdict, node_array, type_array, bits + 1)
 
 def sorted(count):
@@ -258,7 +264,10 @@ def decode_data(input_data, node_array, type_array, size, expected_output = None
             if c & 1 == 0:
                 offset += 1
             else:
-                offset += node_array[offset] + 1
+                # Skip the current offset element, and recreate the offset
+                # stored there by adding 1 to it, giving a total of 2 extra
+                # elements to skip.
+                offset += node_array[offset] + 2
         
         # If the current node is a leaf node then read the value and prepare
         # for the next one.

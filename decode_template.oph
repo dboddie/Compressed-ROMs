@@ -229,8 +229,8 @@ decode:
         bcc next_node       ; A zero value means we go to the next node in
         clc                 ; the array.
 
-        lda ($74),y         ; Read the offset (minus one) from the node
-        sta $79             ; array. (It will be incremented later.)
+        lda ($74),y         ; Read the offset (minus two) from the node
+        sta $79             ; array. (It will be incremented twice later.)
         adc $74             ; Add it to the current offset.
         sta $74
         bcc update_type_offset
@@ -239,7 +239,7 @@ decode:
 
         update_type_offset:
 
-        lda $79             ; Use the offset (minus one) from the node
+        lda $79             ; Use the offset (minus two) from the node
         lsr                 ; array to update the byte offset into the type
         lsr                 ; array.
         lsr                 ; Calculate the number of bytes to skip.
@@ -250,7 +250,7 @@ decode:
 
         lda $79             ; Update the type array bit mask.
         and #$07
-        beq next_node
+        beq before_next_node
 
         tax
 
@@ -267,20 +267,30 @@ decode:
             dex
             bne update_type_mask
 
+        before_next_node:
+
+        ldy #1              ; We need to increment the pointers twice.
+
         next_node:
 
-        inc $74                 ; Increment the offset by one to select the
-        bne update_type_pointer ; next item in the node array.
-        inc $75
+        iny                 ; Increment Y temporarily.
+        next_node_loop:
 
-        update_type_pointer:
+            inc $74                 ; Increment the offset by one to select the
+            bne update_type_pointer ; next item in the node array.
+            inc $75
 
-        rol $77                 ; Update the bit mask in the type array to
-        bcc decode_leaf_check   ; refer to the next item.
+            update_type_pointer:
 
-        rol $77             ; We ran out of bits, so reset the mask to the
-        inc $76             ; first bit. Increment the type offset to refer
-                            ; to the next byte in the array.
+            rol $77                 ; Update the bit mask in the type array to
+            bcc next_node_next      ; refer to the next item.
+
+            rol $77             ; We ran out of bits, so reset the mask to the
+            inc $76             ; first bit. Increment the type offset to refer
+                                ; to the next byte in the array.
+            next_node_next:
+            dey
+            bne next_node_loop
 
         decode_leaf_check:
 
