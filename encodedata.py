@@ -3,7 +3,16 @@
 import os, sys
 import hencode, rlencode
 
-template_file = "decode_template.oph"
+huffman_template_file = "decode_template.oph"
+rl_template_file = "rldecode_template.oph"
+end_template = """
+    cli
+    clc
+    rts
+
+; Data follows this line:
+"""
+
 version = "0.1"
 
 def system(command):
@@ -34,10 +43,11 @@ if __name__ == "__main__":
     data = map(ord, f.read())
     f.close()
     
-    #subst, rldata = rlencode.encode_data(memory)
+    subst, rldata = rlencode.encode_data(data)
+    hdecode_address = decode_address + len(data) - len(rldata)
     
     # Only Huffman encode the run-length encoded data.
-    node_bits, node_array, type_array, output_data = hencode.encode_data(data)
+    node_bits, node_array, type_array, output_data = hencode.encode_data(rldata)
     
     if node_bits > 8:
         sys.stderr.write("Cannot encode node arrays with values requiring more than 8 bits.\n")
@@ -46,17 +56,28 @@ if __name__ == "__main__":
     f = open("temp.oph", "wb")
     
     # Write the decoding routines.
-    f.write(open(template_file).read() % {"load address": decode_address})
+    f.write(open(huffman_template_file).read() % {"load address": decode_address})
     
+    if subst:
+        f.write(open(rl_template_file).read())
+    
+    f.write(end_template)
+
     # Write the details of the original data, Huffman encoding and run-length
     # encoding.
-    f.write(".alias start_address $%x\n" % decode_address)
+    f.write(".alias rl_decode_address $%x\n" % decode_address)
+    f.write(".alias huffman_decode_address $%x\n" % hdecode_address)
     f.write(".alias end_address $%x\n" % (decode_address + len(data)))
-    #f.write(".alias substitutions %i\n" % len(subst))
+    
+    if subst:
+        f.write(".alias substitutions %i\n" % len(subst))
+        f.write("\n")
+        
+        f.write("subst_array:\n")
+        write_oph_data(hencode.encode_bits(subst, 8), f)
+    
     f.write("\n")
     
-    #f.write("subst_array:\n")
-    #write_oph_data(hencode.encode_bits(subst, 8), f)
     f.write("node_array:\n")
     write_oph_data(hencode.encode_bits(node_array, 8), f)
     f.write("\n")
@@ -68,6 +89,7 @@ if __name__ == "__main__":
     f.close()
     
     system("ophis temp.oph -o " + rom_file)
+    os.remove("temp.oph")
     
     rom = open(rom_file, "rb").read()
     rom += "\x00" * (16384 - len(rom))

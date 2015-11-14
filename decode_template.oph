@@ -142,9 +142,9 @@ decode:
 
     sei
 
-    lda #<start_address
+    lda #<huffman_decode_address
     sta $70
-    lda #>start_address
+    lda #>huffman_decode_address
     sta $71
 
     lda #<data
@@ -305,8 +305,3 @@ decode:
         jmp decode_loop
 
     decode_loop_end:
-    cli
-    clc
-    rts
-
-; Data follows this line:

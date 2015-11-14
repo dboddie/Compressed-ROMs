@@ -1,0 +1,94 @@
+
+    rldecode:
+
+    lda #<rl_decode_address
+    sta $70
+    lda #>rl_decode_address
+    sta $71
+
+    lda #<huffman_decode_address
+    sta $72
+    lda #>huffman_decode_address
+    sta $73
+
+    rldecode_loop:
+
+        lda ($72),y             ; Read a byte of run-length encoded data.
+        sta $74
+
+        inc $72
+        bne check_substitutions
+        inc $73
+
+        check_substitutions:
+
+        ldx #0
+        cpx #substitutions
+        beq store_rl_value
+
+        subst_loop:
+
+            cmp subst_array,x           ; If the value is in the substitution
+            bne check_next_substitution ; array then perform a substitution.
+
+            lda ($72),y                 ; Read the length of the span.
+            tax
+
+            inc $72
+            bne insert_span
+            inc $73
+
+            insert_span:
+
+            insert_span_loop:
+
+                cpx #0
+                beq store_rl_value
+
+                lda $74
+                sta ($70),y
+
+                inc $70
+                bne check_end2
+                inc $71
+
+                check_end2:
+
+                lda $70
+                cmp #<end_address
+                bne insert_span_next
+
+                lda $71
+                cmp #>end_address
+                beq rl_decode_end
+
+                insert_span_next:
+                dex
+                beq store_rl_value
+                bne insert_span_loop
+
+            check_next_substitution:
+            inx
+            cpx #substitutions
+            bne subst_loop              ; Check all the values in the array.
+
+        store_rl_value:
+
+        lda $74
+        sta ($70),y     ; The value wasn't found, so just write it as it is.
+
+        inc $70
+        bne check_end3
+        inc $71
+
+        check_end3:
+
+        lda $70
+        cmp #<end_address
+        bne rldecode_loop
+
+        lda $71
+        cmp #>end_address
+        bne rldecode_loop
+
+    rl_decode_end:
