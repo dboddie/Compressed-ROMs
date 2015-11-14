@@ -214,6 +214,10 @@ def decode_data(input_data, node_array, type_array, size, expected_output = None
     offset = 0
     i = 0
     
+    # Each bit represents a choice in the tree leading to a leaf node, which
+    # itself is not represented in the bitstream except when there is only one
+    # node in the tree.
+    
     while len(data) < size:
     
         if bit == 0:

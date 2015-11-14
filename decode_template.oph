@@ -140,6 +140,8 @@ decode_command:
 
 decode:
 
+    sei
+
     lda #<start_address
     sta $70
     lda #>start_address
@@ -293,6 +295,7 @@ decode:
         jmp decode_loop
 
     decode_loop_end:
+    cli
     clc
     rts
 
