@@ -79,12 +79,23 @@ def decode_flags(flags):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
-        sys.stderr.write("Usage: %s <snapshot file> <output file>\n" % sys.argv[0])
+    if not 3 <= len(sys.argv) <= 4:
+        sys.stderr.write("Usage: %s <snapshot file> <output file> [-s|-l]\n" % sys.argv[0])
         sys.exit(1)
     
     input_file = sys.argv[1]
     rom_file = sys.argv[2]
+    
+    if len(sys.argv) == 4:
+        if sys.argv[3] == "-s":
+            start_template = "service_template.oph"
+        elif sys.argv[3] == "-l":
+            start_template = "language_template.oph"
+        else:
+            sys.stderr.write("Usage: %s <snapshot file> <output file> [-s|-l]\n" % sys.argv[0])
+            sys.exit(1)
+    else:
+        start_template = "service_template.oph"
     
     f = open(input_file, "rb")
     
@@ -133,6 +144,7 @@ if __name__ == "__main__":
         sys.exit(1)
     
     f = open("temp.oph", "wb")
+    f.write(open(start_template).read())
     
     # Write the decoding routines.
     f.write(open(huffman_template_file).read() % {"load address": decode_address})

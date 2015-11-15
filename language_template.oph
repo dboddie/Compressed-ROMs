@@ -1,0 +1,41 @@
+.org $8000
+
+rom_start:
+jmp language_entry
+.byte 0, 0, 0
+
+; ROM type
+.byte $42       ; 6502 code (2), language ($40), service ($80)
+
+copyright_offset:
+.byte [copyright_string - rom_start - 1]
+
+; Version
+.byte 1
+
+; Title string
+.byte "Decoder", 0
+
+; Version string
+.byte "1.0", 0
+
+copyright_string:
+.byte "(C) 2015 David Boddie", 0
+
+; Second processor relocation address
+.byte 0, $80, 0, 0
+
+language_entry:
+
+    cmp #1
+    beq is_language
+    rts
+
+    is_language:
+    ldx #255
+    txs
+    cli
+    jmp decode_command
+
+exit_rom:
+    rts

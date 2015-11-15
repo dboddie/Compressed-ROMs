@@ -29,6 +29,12 @@ end_template = """
 
 ; Data follows this line:
 """
+exec_template = """
+    cli
+    jmp $%(address)x
+
+; Data follows this line:
+"""
 
 def system(command):
 
@@ -46,13 +52,22 @@ def write_oph_data(data, f):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 4:
-        sys.stderr.write("Usage: %s <data file> <decode address> <ROM file>\n" % sys.argv[0])
+    if len(sys.argv) != 4 and len(sys.argv) != 6:
+        sys.stderr.write("Usage: %s <data file> <decode address> <ROM file> [-e <address>]\n" % sys.argv[0])
         sys.exit(1)
     
     input_file = sys.argv[1]
     decode_address = int(sys.argv[2], 16)
     rom_file = sys.argv[3]
+    
+    if len(sys.argv) == 6:
+        if sys.argv[4] == "-e":
+            exec_addr = int(sys.argv[5], 16)
+        else:
+            sys.stderr.write("Usage: %s <data file> <decode address> <ROM file> [-e <address>]\n" % sys.argv[0])
+            sys.exit(1)
+    else:
+        exec_addr = None
     
     f = open(input_file, "rb")
     data = map(ord, f.read())
@@ -76,7 +91,10 @@ if __name__ == "__main__":
     if subst:
         f.write(open(rl_template_file).read())
     
-    f.write(end_template)
+    if exec_addr is None:
+        f.write(end_template)
+    else:
+        f.write(exec_template % {"address": exec_addr})
 
     # Write the details of the original data, Huffman encoding and run-length
     # encoding.
@@ -104,7 +122,7 @@ if __name__ == "__main__":
     f.close()
     
     system("ophis temp.oph -o " + rom_file)
-    os.remove("temp.oph")
+    #os.remove("temp.oph")
     
     rom = open(rom_file, "rb").read()
     rom += "\x00" * (16384 - len(rom))
