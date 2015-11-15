@@ -50,7 +50,7 @@ end_template = """
 ; Data follows this line:
 """
 
-decode_address = 0x0000
+decode_address = 0x0100
 
 def system(command):
 
