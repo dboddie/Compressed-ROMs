@@ -65,6 +65,17 @@ def write_oph_data(data, f):
         f.write(".byte " + ", ".join(map(str, line)) + "\n")
         i += 24
 
+def decode_flags(flags):
+
+    s = ""
+    for f in "NV1BDIZC":
+        if flags & 0x80:
+            s += f
+        else:
+            s += " "
+        flags = (flags << 1) & 0xff
+    
+    return s
 
 if __name__ == "__main__":
 
@@ -88,9 +99,12 @@ if __name__ == "__main__":
     a, x, y = map(ord, f.read(3))
     # NV1B DIZC
     flags = ord(f.read(1))
+    print "flags:", decode_flags(flags)
     
     sp = ord(f.read(1))
     pc_low, pc_high = map(ord, f.read(2))
+    pc = pc_low | (pc_high << 8)
+    print "pc:", hex(pc)
     
     # Skip the NMI and IRQ states.
     nmi, irq = f.read(2)
@@ -100,6 +114,7 @@ if __name__ == "__main__":
     
     # Skip the ULA state.
     ula = map(ord, f.read(41))
+    print "rom bank:", hex(ula[4])
     
     # Read the memory.
     f.seek(decode_address, 1)
@@ -125,7 +140,7 @@ if __name__ == "__main__":
     if subst:
         f.write(open(rl_template_file).read())
     
-    end_details = {"pc": pc_low | (pc_high << 8),
+    end_details = {"pc": pc,
                    "sp": sp,
                    "flags": flags,
                    "a": a, "x": x, "y": y,
@@ -166,6 +181,10 @@ if __name__ == "__main__":
     
     system("ophis temp.oph -o " + rom_file)
     #os.remove("temp.oph")
+    
+    if os.stat(rom_file).st_size > 16384:
+        sys.stderr.write("Warning: ROM file '%s' is larger than 16K.\n" % rom_file)
+        sys.exit(1)
     
     rom = open(rom_file, "rb").read()
     rom += "\x00" * (16384 - len(rom))
