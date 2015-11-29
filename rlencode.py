@@ -113,8 +113,9 @@ def encode_data(input_data):
         values.append((count[i], i))
         i += 1
     
-    # Discard values that didn't occur.
-    values = filter(lambda (n, i): n != 0, values)
+    # Discard values that didn't occur or occurred infrequently.
+    # We should also discard those that don't appear in spans.
+    values = filter(lambda (n, i): n >= 3, values)
     # Sort the values in increasing order of frequency.
     values.sort()
     
@@ -127,6 +128,8 @@ def encode_data(input_data):
     
     while i >= 0:
     
+        sys.stdout.write("\rTesting savings for %i/%i." % (len(values) - i, len(values)))
+        sys.stdout.flush()
         n, c = values[i]
         new_data = find_spans(c, data)
         
@@ -135,11 +138,10 @@ def encode_data(input_data):
             # substitution is less than the original length minus an arbitrary
             # amount then record the substitution value.
             subst.append(c)
-        else:
-            break
         
         i -= 1
     
+    sys.stdout.write("\n")
     data = encode_spans(subst, data)
     
     return subst, data
