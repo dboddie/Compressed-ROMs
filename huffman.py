@@ -4,6 +4,9 @@ import marshal, sys
 
 class Node:
 
+    """Represents a node in the tree used to encode values in the compressed
+    data stream."""
+    
     def __init__(self, less, greater):
     
         self.less = less
@@ -21,6 +24,8 @@ class Node:
 
 class BitWriter:
 
+    """Writes values with arbitrary numbers of bits to a sequence of bytes."""
+    
     def __init__(self):
     
         self.header = None
@@ -72,6 +77,8 @@ class BitReaderError(Exception):
 
 class BitReader:
 
+    """Reads values with arbitrary numbers of bits from a sequence of bytes."""
+    
     def __init__(self, data):
     
         self.current = 0
