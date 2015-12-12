@@ -20,6 +20,7 @@ version = "0.1"
 import os, sys
 import hencode, rlencode
 
+start_template = "service_template.oph"
 huffman_template_file = "decode_template.oph"
 rl_template_file = "rldecode_template.oph"
 end_template = """
@@ -84,6 +85,7 @@ if __name__ == "__main__":
         sys.exit(1)
     
     f = open("temp.oph", "wb")
+    f.write(open(start_template).read())
     
     # Write the decoding routines.
     f.write(open(huffman_template_file).read() % {"load address": decode_address})
