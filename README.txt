@@ -27,14 +27,14 @@ and append additional copyright information to the existing copyright string.
 For example, if the compressed data is for version 2.1 of program "XYZ",
 written by "A.N. Author" in the year 2016, update the strings accordingly:
 
-; Title string
-.byte "Decoder for XYZ 2.1", 0
+  ; Title string
+  .byte "Decoder for XYZ 2.1", 0
 
-; Version string
-.byte "1.0", 0
+  ; Version string
+  .byte "1.0", 0
 
-copyright_string:
-.byte "(C) 2015 David Boddie; XYZ is (C) 2016 A.N. Author", 0
+  copyright_string:
+  .byte "(C) 2015 David Boddie; XYZ is (C) 2016 A.N. Author", 0
 
 Update the version string each time you need to repackage the same original
 code or data (for example, "XYZ 2.1") and reset the version to 1.0 for each
