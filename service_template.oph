@@ -32,10 +32,10 @@ copyright_offset:
 .byte "Decoder", 0
 
 ; Version string
-.byte "1.0", 0
+.byte "1.00", 0
 
 copyright_string:
-.byte "(C) 2015 David Boddie", 0
+.byte "(C)2015 David Boddie", 0
 
 ; Second processor relocation address
 .byte 0, $80, 0, 0
@@ -46,7 +46,6 @@ service_entry:
     beq service_command
 
     service_entry_exit:
-    clc
     rts
 
 commands:
@@ -67,26 +66,26 @@ service_command:
     clc
     tya         ; Store the address of the command line in an new address that
     adc $f2     ; can used zero-based post-indexed addressing.
-    sta $74
+    sta $a8
     lda $f3
     adc #0
-    sta $75
+    sta $a9
     clc
 
     ldx #0
     service_command_loop:
 
         lda commands,x
-        sta $72
+        sta $aa
         lda [commands + 1],x
-        sta $73
+        sta $ab
 
         ldy #0
 
         service_command_test_loop:
 
-            lda ($72),y
-            cmp ($74),y
+            lda ($aa),y
+            cmp ($a8),y
             bne service_command_next
             iny
             cmp #13
@@ -94,11 +93,11 @@ service_command:
 
         txa
         lda routines,x
-        sta $72
+        sta $aa
         lda [routines + 1],x
-        sta $73
+        sta $ab
 
-        jmp ($72)
+        jmp ($aa)
 
         service_command_next:
 
