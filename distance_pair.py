@@ -54,7 +54,7 @@ def compress(data):
         # and length, skipping the corresponding number of matching bytes in
         # the input stream.
         else:
-            # Store length - 1 to allow 256 to be used for both.
+            # Store length - 1 to allow 256 to be used.
             output += [special, i - b, len(best) - 1]
             i += len(best)
     
