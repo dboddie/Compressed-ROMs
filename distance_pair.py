@@ -75,7 +75,7 @@ def find_match(data, k, i):
     match = []
     j = i
     
-    while k < i:
+    while len(match) < 255:
     
         if j == len(data) or data[k] != data[j]:
             return match
@@ -106,9 +106,10 @@ def decompress(data):
             if offset == 0:
                 output.append(special)
             else:
-                offset = len(output) - offset
                 count += 1
-                output += output[offset:offset + count]
+                while count > 0:
+                    output.append(output[-offset])
+                    count -= 1
             
             i += 3
     
