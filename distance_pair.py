@@ -197,9 +197,6 @@ def decompress(data, window = "output", stop_at = None):
                     count = data[i + 2] + 4
                     i += 3
                 
-                #if stop_at != None:
-                #    
-                
                 if window == "compressed":
                     offset -= count
                 
