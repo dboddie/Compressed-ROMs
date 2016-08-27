@@ -17,10 +17,10 @@ def compress(data, window = "output"):
         # Compare strings in the window with upcoming input, starting at the
         # beginning of the window.
         if window == "output":
-            k = max(0, i - 255)
+            k = max(0, i - 128)
             end = i
         else:
-            k = max(0, len(output) - 255)
+            k = max(0, len(output) - 128)
             end = len(output)
         
         while k < end:
@@ -30,15 +30,21 @@ def compress(data, window = "output"):
             else:
                 match = find_match_in_compressed(output, data, k, i)
             
-            if len(match) > len(best):
+            # Find better matches, replacing those of equal length with later
+            # ones as they are found.
+            if len(match) >= len(best):
                 best = match
                 b = k
             
             k += 1
         
-        # If there is no match then just include the next byte in the window.
-        if len(best) <= 3:
+        length = len(best)
         
+        if length <= 2:
+        
+            # If there is no match, or the match would be inefficient to record,
+            # then just include the next byte in the window.
+            
             # If the special byte occurs in the input, encode it using a
             # special sequence.
             if data[i] == special:
@@ -48,16 +54,41 @@ def compress(data, window = "output"):
                 output.append(data[i])
                 i += 1
         
-        # Otherwise, encode the special byte, offset from the end of the window
-        # and length, skipping the corresponding number of matching bytes in
-        # the input stream.
         else:
-            # Store length - 1 to allow 256 to be used.
+            # Otherwise, encode the special byte, offset from the end of the
+            # window and length, skipping the corresponding number of matching
+            # bytes in the input stream. Subtracting 3 from the length in the
+            # second case but nothing from the offset avoids the possibility of
+            # encoding a zero in the second byte, confusing the first two cases.
+            #
+            # special 0                 -> special
+            # special 0llloooo          -> length (3-10), offset (1-15)
+            # special 1ooooooo llllllll -> offset (1-128), length (4-259)
+            
             if window == "output":
-                output += [special, i - b, len(best) - 1]
+                offset = i - b
             else:
-                output += [special, len(output) - b, len(best) - 1]
-            i += len(best)
+                offset = len(output) - b
+            
+            if length < 11 and offset < 16:
+                # Store non-zero offset to avoid potential encoding of zero
+                # in the second byte.
+                output += [special, ((length - 3) << 4) | offset]
+                i += length
+            
+            elif length > 3:
+                # Store offset - 1 and length - 4 to allow higher lengths
+                # to be stored.
+                output += [special, 0x80 | (offset - 1), length - 4]
+                i += length
+            
+            elif data[i] == special:
+                output += [special, 0]
+                i += 1
+            
+            else:
+                output.append(data[i])
+                i += 1
     
     return output
 
@@ -95,7 +126,7 @@ def find_match(data, k, i):
     match = []
     j = i
     
-    while len(match) < 255:
+    while len(match) < 259:
     
         if j == len(data) or data[k] != data[j]:
             return match
@@ -135,7 +166,7 @@ def find_match_in_compressed(output, data, k, i):
     return match
 
 
-def decompress(data, window = "output"):
+def decompress(data, window = "output", stop_at = None):
 
     special = data[0]
     output = []
@@ -153,8 +184,21 @@ def decompress(data, window = "output"):
             if offset == 0:
                 output.append(special)
                 i += 2
+            
             else:
-                count = data[i + 2] + 1
+                j = i
+                
+                if offset & 0x80 == 0:
+                    count = (offset >> 4) + 3
+                    offset = offset & 0x0f
+                    i += 2
+                else:
+                    offset = (offset & 0x7f) + 1
+                    count = data[i + 2] + 4
+                    i += 3
+                
+                #if stop_at != None:
+                #    
                 
                 if window == "compressed":
                     offset -= count
@@ -163,10 +207,11 @@ def decompress(data, window = "output"):
                     if window == "output":
                         output.append(output[-offset])
                     else:
-                        output.append(data[i - offset - count])
+                        output.append(data[j - offset - count])
                     count -= 1
-            
-                i += 3
+        
+        if stop_at != None and len(output) > stop_at:
+            return data[:i], output
     
     return output
 
@@ -218,6 +263,16 @@ def unmerge(data):
     return output
 
 
+def hexdump(data):
+
+    i = 0
+    while i < len(data):
+    
+        d = data[i:i+16]
+        print " ".join(map(lambda x: "%02x" % x, d))
+        i += 16
+
+
 if __name__ == "__main__":
 
     args = sys.argv[:]
@@ -254,7 +309,11 @@ if __name__ == "__main__":
         
         c = compress(data, mode)
         print "Compressed:", len(c)
-        out_f.write("".join(map(chr, c)))
+        try:
+            out_f.write("".join(map(chr, c)))
+        except ValueError:
+            hexdump(c)
+            raise
         
         d = decompress(c, mode)
         if do_merge:
@@ -267,6 +326,10 @@ if __name__ == "__main__":
                 i += 1
             
             print "Data at %i compressed incorrectly." % i
+            hexdump(data[:i])
+            print
+            c, d = decompress(c, mode, stop_at = i)
+            hexdump(c[:i + 3])
     
     else:
         print "Input size:", len(data)
