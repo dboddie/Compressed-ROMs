@@ -144,6 +144,16 @@ def usage():
         "<output file>\n" % sys.argv[0])
     sys.exit(1)
 
+def get_arg(option, args, default):
+
+    if option in args:
+        i = args.index(option)
+        value = args[i + 1]
+        args.pop(i)
+        args.pop(i)
+        return value
+    else:
+        return default
 
 if __name__ == "__main__":
 
@@ -158,24 +168,9 @@ if __name__ == "__main__":
     else:
         start_template = "service_template.oph"
     
-    if "-e" in args:
-        i = args.index("-e")
-        exec_addr = int(args[i + 1], 16)
-        args = args[:i] + args[i + 2:]
-    
-    if "-d" in args:
-        i = args.index("-d")
-        decode_address = int(args[i + 1], 16)
-        args = args[:i] + args[i + 2:]
-    else:
-        decode_address = 0x00d0
-    
-    if "-r" in args:
-        i = args.index("-r")
-        reentry_address = int(args[i + 1], 16)
-        args = args[:i] + args[i + 2:]
-    else:
-        reentry_address = 0x00b0
+    exec_addr = int(get_arg("-e", args, "0"), 16)
+    decode_address = int(get_arg("-d", args, "00d0"), 16)
+    reentry_address = int(get_arg("-r", args, "00b0"), 16)
     
     if len(args) != 3:
         usage()
@@ -215,6 +210,10 @@ if __name__ == "__main__":
         # Skip the ULA state.
         ula = map(ord, f.read(41))
         print "rom bank:", hex(ula[4])
+        
+        print "sound:", ula[7]
+        print "tape:", ula[9]
+        print "tape out:", ula[10]
         
         # Read the palette.
         palette = ula[11:27]
@@ -283,10 +282,13 @@ if __name__ == "__main__":
                        "sp": sp,
                        "flags": flags,
                        "a": a, "x": x, "y": y,
-                       "mode": mode << 3,
+                       "mode": (mode << 3) | 0x80,
                        "mode low": ula[2],
                        "mode high": ula[3],
                        "bank": ula[4],
+                       "sound": ula[7],
+                       "tape": ula[9],
+                       "tapeout": ula[10],
                        "reentry address": reentry_address,
                        "reentry low": reentry_address & 0xff,
                        "reentry high": reentry_address >> 8,
