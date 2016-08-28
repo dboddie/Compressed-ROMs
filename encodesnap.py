@@ -20,13 +20,47 @@ version = "0.1"
 import os, sys
 import hencode, rlencode
 import distance_pair
+from palette import rgb, get_entries
 
 huffman_template_file = "decode_template.oph"
 rl_template_file = "rldecode_template.oph"
 dp_template_file = "dp_template.oph"
 
 snapshot_end_template = """
-    ldx #$0a
+    ; Copy the reentry code into RAM.
+
+    lda #<reentry
+    sta $70
+    lda #>reentry
+    sta $71
+    lda #$%(reentry low)x
+    sta $72
+    lda #$%(reentry high)x
+    sta $73
+    ldy #0
+
+    reentry_loop:
+        lda ($70),y
+        sta ($72),y
+
+        inc $70
+        bne re2
+        inc $71
+        re2:
+
+        inc $72
+        bne re3
+        inc $73
+        re3:
+
+        lda $70
+        cmp #<data
+        bne reentry_loop
+        lda $71
+        cmp #>data
+        bne reentry_loop
+
+    ldx #$08
     zero_page_loop:
         lda zero_page,x
         sta $70,x
@@ -39,6 +73,16 @@ snapshot_end_template = """
     sta $fe02
     lda #$%(mode high)x
     sta $fe03
+
+    %(palette code)s
+
+    ; Run the reentry code.
+    jmp $%(reentry address)x
+
+reentry:
+    lda #$%(bank)x
+    sta $f4
+    sta $fe05
 
     ldx #$%(sp)x
     txs
@@ -95,7 +139,9 @@ def decode_flags(flags):
 
 def usage():
 
-    sys.stderr.write("Usage: %s [-s|-l] [-e <execution address>] [-d <decode address>] <snapshot file> <output file>\n" % sys.argv[0])
+    sys.stderr.write("Usage: %s [-s|-l] [-e <execution address>] "
+        "[-d <decode address>] [-r <reentry address>] <snapshot file> "
+        "<output file>\n" % sys.argv[0])
     sys.exit(1)
 
 
@@ -122,7 +168,14 @@ if __name__ == "__main__":
         decode_address = int(args[i + 1], 16)
         args = args[:i] + args[i + 2:]
     else:
-        decode_address = 0x0100
+        decode_address = 0x00d0
+    
+    if "-r" in args:
+        i = args.index("-r")
+        reentry_address = int(args[i + 1], 16)
+        args = args[:i] + args[i + 2:]
+    else:
+        reentry_address = 0x00b0
     
     if len(args) != 3:
         usage()
@@ -163,6 +216,11 @@ if __name__ == "__main__":
         ula = map(ord, f.read(41))
         print "rom bank:", hex(ula[4])
         
+        # Read the palette.
+        palette = ula[11:27]
+        print "mode:", ula[8]
+        print "palette:", palette
+        
         # Read the memory.
         f.seek(decode_address, 1)
         memory = map(ord, f.read(32768 - decode_address))
@@ -199,13 +257,40 @@ if __name__ == "__main__":
     f.write(open(dp_template_file).read())
     
     if make_snapshot:
+        mode = ula[8]
+        if mode in (0, 3, 4, 6):
+            colours = [rgb(palette[0]), rgb(palette[14])]
+            registers = get_entries(2, colours)
+        elif mode in (1, 5):
+            colours = [rgb(palette[0]), rgb(palette[2]), rgb(palette[8]), rgb(palette[10])]
+            registers = get_entries(4, colours)
+        else:
+            colours = [rgb(palette[0]), rgb(palette[14])]
+            registers = get_entries(16, colours)
+        
+        palette_code = []
+        v = 0xfe08
+        for r in registers:
+            palette_code += [
+                "lda #$%x" % r,
+                "sta $%x" % v
+                ]
+            v += 1
+        
+        palette_code = "\n    ".join(palette_code)
+        
         end_details = {"pc": pc,
                        "sp": sp,
                        "flags": flags,
                        "a": a, "x": x, "y": y,
-                       "mode": ula[8] << 3,
+                       "mode": mode << 3,
                        "mode low": ula[2],
-                       "mode high": ula[3]}
+                       "mode high": ula[3],
+                       "bank": ula[4],
+                       "reentry address": reentry_address,
+                       "reentry low": reentry_address & 0xff,
+                       "reentry high": reentry_address >> 8,
+                       "palette code": palette_code}
         f.write(snapshot_end_template % end_details)
     else:
         f.write(data_end_template)
