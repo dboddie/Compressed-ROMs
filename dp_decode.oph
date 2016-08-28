@@ -36,14 +36,14 @@ decompress: ; $70,$71=compressed data, $72,$73=destination start
 
     jsr increment_src
 
-    decompress_loop1:
+    decompress_loop:
 
-        lda (src),y
+        lda (src),y                 ; data[i]
         cmp special
         beq handle_special
 
             sta (dest),y
-            jsr increment_src
+            jsr increment_src       ; i += 1
             jsr increment_dest
             jmp decompress_next
 
@@ -54,9 +54,9 @@ decompress: ; $70,$71=compressed data, $72,$73=destination start
             bne handle_reference
 
                 lda special
-                dey
+                dey                 ; i
                 sta (dest),y
-                jsr increment_src_2
+                jsr increment_src_2 ; i += 2
                 jsr increment_dest
                 jmp decompress_next
 
@@ -65,44 +65,50 @@ decompress: ; $70,$71=compressed data, $72,$73=destination start
                 cmp #$80
                 bcs far_reference
 
-                sta offset  ; the offset is a combined offset-count value
-                lsr
-                lsr
-                lsr
-                lsr
-                adc #3      ; count = (offset >> 4) + 3
-                tax
+                    sta offset  ; the offset is a combined offset-count value
+                    and #$f0
+                    lsr
+                    lsr
+                    lsr
+                    lsr
+                    adc #3      ; count = (offset >> 4) + 3
+                    tax
 
-                lda offset
-                and #$0f
-                sta offset
+                    lda offset
+                    and #$0f
+                    sta offset
 
-                jsr increment_src_2     ; i += 2
-                jsr copy_decompressed
-                jmp decompress_next
+                    ldy #0
+
+                    jsr increment_src_2     ; i += 2
+                    jsr copy_decompressed
+                    jmp decompress_next
 
                 far_reference:
-                and #$7f
-                adc #0      ; C is set, so this adds 1
-                sta offset
 
-                iny         ; i + 2
-                lda (src),y ; count - 4
-                tax
+                    and #$7f
+                    adc #0      ; C is set, so this adds 1
+                    sta offset
 
-                jsr increment_src_3     ; i += 3
-                jsr copy_decompressed
-                ldx #4
-                jsr copy_decompressed   ; copy the extra four bytes
+                    iny         ; i + 2
+                    lda (src),y ; count - 4
+                    tax
+
+                    ldy #0
+
+                    jsr increment_src_3     ; i += 3
+                    jsr copy_decompressed
+                    ldx #4
+                    jsr copy_decompressed   ; copy the extra four bytes
 
         decompress_next:
 
         lda dest_low
         cmp end_low
-        bne decompress_loop1
+        bne decompress_loop
         lda dest_high
         cmp end_high
-        bne decompress_loop1
+        bne decompress_loop
 
     clc
     rts
@@ -135,23 +141,33 @@ increment_dest:
 
 copy_decompressed:
 
+    cpx #0                      ; Since we don't add 4 to the stored count
+    bne copy_decompressed_begin ; value to get the real length, we need to
+    rts                         ; handle the case where the stored value is 0.
+
+    copy_decompressed_begin:
+ 
     sec
-    lda src_low
-    sbc offset      ; copy from = src - offset
+    lda dest_low
+    sbc offset      ; copy from = dest - offset
     sta from_low
-    lda src_high
+    lda dest_high
     sbc #0
     sta from_high
     clc
 
-    ldy #0
-
     copy_decompressed_loop:
 
-        lda (from_high),y
+        lda (from_low),y
         sta (dest),y
+
+        inc from_low
+        bne copy_decompressed_loop_next
+        inc from_high
+
+        copy_decompressed_loop_next:
         jsr increment_dest
         dex
-        bpl copy_decompressed_loop
+        bne copy_decompressed_loop
 
     rts
