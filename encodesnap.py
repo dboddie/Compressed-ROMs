@@ -26,7 +26,22 @@ huffman_template_file = "decode_template.oph"
 rl_template_file = "rldecode_template.oph"
 dp_template_file = "dp_template.oph"
 
-snapshot_end_template = """
+check_system_template = """
+    ; Check the system in use.
+
+    lda #129
+    ldx #0
+    ldy #255
+    jsr $fff4
+    cpx #1
+    beq electron_os
+    bne exit_rom
+
+    electron_os:
+
+"""
+
+reentry_copy_template = """
     ; Copy the reentry code into RAM.
 
     lda #<reentry
@@ -37,29 +52,20 @@ snapshot_end_template = """
     sta $72
     lda #$%(reentry high)x
     sta $73
-    ldy #0
+
+    ldy #[data - reentry]
 
     reentry_loop:
+        dey
+
         lda ($70),y
         sta ($72),y
 
-        inc $70
-        bne re2
-        inc $71
-        re2:
-
-        inc $72
-        bne re3
-        inc $73
-        re3:
-
-        lda $70
-        cmp #<data
+        cpy #0
         bne reentry_loop
-        lda $71
-        cmp #>data
-        bne reentry_loop
+"""
 
+snapshot_end_template = reentry_copy_template + """
     ldx #$08
     zero_page_loop:
         lda zero_page,x
@@ -75,6 +81,7 @@ snapshot_end_template = """
     sta $fe03
 
     %(palette code)s
+    %(rom code)s
 
     ; Run the reentry code.
     jmp $%(reentry address)x
@@ -95,6 +102,19 @@ reentry:
     jmp $%(pc)x
 
 ; Data follows this line:
+"""
+
+chain_end_template = reentry_copy_template + """
+    ; Run the reentry code.
+    jmp $%(reentry address)x
+
+reentry:
+    cli
+    ldx #<[%(reentry address)i + next_rom - reentry]
+    ldy #>[%(reentry address)i + next_rom - reentry]
+    jsr $fff7
+
+next_rom: .byte "%(next rom)s", 13
 """
 
 data_end_template = """
@@ -140,8 +160,9 @@ def decode_flags(flags):
 def usage():
 
     sys.stderr.write("Usage: %s [-s|-l] [-e <execution address>] "
-        "[-d <decode address>] [-r <reentry address>] <snapshot file> "
-        "<output file>\n" % sys.argv[0])
+        "[-d <decode address>] [-f <decode end address>] "
+        "[-r <reentry address>] [-c <next rom command>] [-R] "
+        "<snapshot file> <output file>\n" % sys.argv[0])
     sys.exit(1)
 
 def get_arg(option, args, default):
@@ -170,7 +191,22 @@ if __name__ == "__main__":
     
     exec_addr = int(get_arg("-e", args, "0"), 16)
     decode_address = int(get_arg("-d", args, "00d0"), 16)
+    decode_end_address = int(get_arg("-f", args, "8000"), 16)
     reentry_address = int(get_arg("-r", args, "00b0"), 16)
+    name = get_arg("-n", args, "MGRUN")
+    chain = get_arg("-c", args, "")
+    
+    if "-c" in args:
+        check_system = True
+        args.remove("-c")
+    else:
+        check_system = False
+    
+    if "-R" in args:
+        star_rom = True
+        args.remove("-R")
+    else:
+        star_rom = False
     
     if len(args) != 3:
         usage()
@@ -222,7 +258,7 @@ if __name__ == "__main__":
         
         # Read the memory.
         f.seek(decode_address, 1)
-        memory = map(ord, f.read(32768 - decode_address))
+        memory = map(ord, f.read(decode_end_address - decode_address))
         
         f.close()
     
@@ -245,7 +281,7 @@ if __name__ == "__main__":
     output_data = distance_pair.compress(memory)
     
     f = open("temp.oph", "wb")
-    f.write(open(start_template).read())
+    f.write(open(start_template).read() % {"rom name string": name})
     
     # Write the decoding routines.
     #f.write(open(huffman_template_file).read())
@@ -253,9 +289,15 @@ if __name__ == "__main__":
     #if subst:
     #    f.write(open(rl_template_file).read())
     
+    f.write("decode_command:\n\n")
+    
+    if check_system:
+        f.write(check_system_template)
+    
     f.write(open(dp_template_file).read())
     
-    if make_snapshot:
+    if make_snapshot and not chain:
+    
         mode = ula[8]
         if mode in (0, 3, 4, 6):
             colours = [rgb(palette[0]), rgb(palette[14])]
@@ -278,6 +320,14 @@ if __name__ == "__main__":
         
         palette_code = "\n    ".join(palette_code)
         
+        if star_rom:
+            rom_code = (
+                "    lda #141\n"
+                "    jsr $ffee"
+                )
+        else:
+            rom_code = ""
+        
         end_details = {"pc": pc,
                        "sp": sp,
                        "flags": flags,
@@ -292,8 +342,18 @@ if __name__ == "__main__":
                        "reentry address": reentry_address,
                        "reentry low": reentry_address & 0xff,
                        "reentry high": reentry_address >> 8,
-                       "palette code": palette_code}
+                       "palette code": palette_code,
+                       "rom code": rom_code}
         f.write(snapshot_end_template % end_details)
+    
+    elif chain:
+        f.write(chain_end_template % {
+            "next rom": chain,
+            "reentry address": reentry_address,
+            "reentry low": reentry_address & 0xff,
+            "reentry high": reentry_address >> 8,
+            })
+    
     else:
         f.write(data_end_template)
     

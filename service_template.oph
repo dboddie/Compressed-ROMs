@@ -35,7 +35,7 @@ copyright_offset:
 .byte "1.00", 0
 
 copyright_string:
-.byte "(C)2015 David Boddie", 0
+.byte "(C)2016 David Boddie", 0
 
 ; Second processor relocation address
 .byte 0, $80, 0, 0
@@ -51,7 +51,7 @@ service_entry:
 commands:
 .byte <decode_name, >decode_name
 
-decode_name: .byte "DECODE", 13
+decode_name: .byte "%(rom name string)s", 13
 
 routines:
 .byte <decode_command, >decode_command

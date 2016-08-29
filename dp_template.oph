@@ -25,20 +25,6 @@
 .alias from_low     $76
 .alias from_high    $77
 
-decode_command:
-
-    ; Check the system in use.
-
-    lda #129
-    ldx #0
-    ldy #255
-    jsr $fff4
-    cpx #1
-    beq electron_os
-    bne exit_rom
-
-    electron_os:
-
 decode:
 
     sei
@@ -135,6 +121,12 @@ decode:
 
     jmp end_code
 
+increment_src_3:
+    jsr increment_src
+
+increment_src_2:
+    jsr increment_src
+
 increment_src:
 
     inc src_low
@@ -143,14 +135,6 @@ increment_src:
 
     increment_src_exit:
     rts
-
-increment_src_2:
-    jsr increment_src
-    jmp increment_src
-
-increment_src_3:
-    jsr increment_src_2
-    jmp increment_src
 
 increment_dest:
 
