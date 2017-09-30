@@ -31,10 +31,10 @@ decompress: ; $70,$71=compressed data, $72,$73=destination start
             ; $74,$75=destination end (one byte after decompressed data)
 
     ldy #0
-    lda (src),y
+    lda (src),y                     ; data[i]
     sta special
 
-    jsr increment_src
+    jsr increment_src               ; i += 1
 
     decompress_loop:
 
@@ -113,6 +113,12 @@ decompress: ; $70,$71=compressed data, $72,$73=destination start
     clc
     rts
 
+increment_src_3:
+    jsr increment_src
+
+increment_src_2:
+    jsr increment_src
+
 increment_src:
 
     inc src_low
@@ -121,14 +127,6 @@ increment_src:
 
     increment_src_exit:
     rts
-
-increment_src_2:
-    jsr increment_src
-    jmp increment_src
-
-increment_src_3:
-    jsr increment_src_2
-    jmp increment_src
 
 increment_dest:
 
